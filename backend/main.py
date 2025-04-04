@@ -7,9 +7,8 @@ from typing import List
 
 class Company(BaseModel):
     name: str
-    funding: int
     industry: str
-    founded: int
+    target_customer: str
 
 class WebsiteAnalysis(BaseModel):
     companies: List[Company]
@@ -45,7 +44,7 @@ async def analyze_website(request: WebsiteRequest):
         print("="*50 + "\n")
 
         # Limit content length to first 2000 characters
-        content = content[:2000]
+        # content = content[:2000]
         print(f"Content truncated to {len(content)} characters")
         print("\n" + "="*50)
         print("TRUNCATED CONTENT:")
@@ -59,7 +58,7 @@ async def analyze_website(request: WebsiteRequest):
             "model": "llama3.2",
             "messages": [{
                 "role": "user",
-                "content": "Extract company information from this text. Return a JSON with a list of companies. Each company should have: name (string), funding (integer), industry (string), founded (integer)."
+                "content": "Extract company information from all listed companies on this blog post. Return a JSON with a list of companies. This should contain the company name, industry and their customer (B2B or B2C)."
             },
             {
                 "role": "user",
@@ -67,7 +66,7 @@ async def analyze_website(request: WebsiteRequest):
             }],
             "stream": False,
             "format": WebsiteAnalysis.model_json_schema(),
-            "options": {"num_ctx": 4096}
+            "options": {"num_ctx": 30000}
         }
         print(f"Ollama request data prepared with format: {json.dumps(WebsiteAnalysis.model_json_schema(), indent=2)}")
 

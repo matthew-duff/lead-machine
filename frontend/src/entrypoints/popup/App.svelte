@@ -63,12 +63,53 @@
       
       const data = await response.json();
       companies = data.companies;
+      
+      // Automatically download CSV when companies are loaded
+      if (companies.length > 0) {
+        downloadCSV();
+      }
     } catch (err) {
       console.error('Error extracting company info:', err);
       error = err instanceof Error ? err.message : 'Unknown error occurred';
     } finally {
       loading = false;
     }
+  }
+  
+  // Function to convert companies to CSV
+  function convertToCSV(): string {
+    if (companies.length === 0) return '';
+    
+    // CSV header
+    const header = 'Name,Industry,Target Customer\n';
+    
+    // CSV rows
+    const rows = companies.map(company => {
+      return `"${company.name}","${company.industry}",${company.target_customer}`;
+    }).join('\n');
+    
+    return header + rows;
+  }
+  
+  // Function to download CSV
+  function downloadCSV() {
+    const csv = convertToCSV();
+    if (!csv) return;
+    
+    // Create a blob and download link
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    
+    // Set download attributes
+    link.setAttribute('href', url);
+    link.setAttribute('download', `companies_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = 'hidden';
+    
+    // Add to document, click, and remove
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
   
   // Get the current URL when the component mounts
@@ -101,13 +142,17 @@
     
     {#if companies.length > 0}
       <div class="results">
-        <h2>Extracted Companies</h2>
+        <div class="results-header">
+          <h2>Extracted Companies</h2>
+          <button class="download-button" on:click={downloadCSV}>
+            Download CSV
+          </button>
+        </div>
         {#each companies as company}
           <div class="company-card">
             <h3>{company.name}</h3>
             <p><strong>Industry:</strong> {company.industry}</p>
-            <p><strong>Funding:</strong> ${company.funding.toLocaleString()}</p>
-            <p><strong>Founded:</strong> {company.founded}</p>
+            <p><strong>Target Customer:</strong> {company.target_customer}</p>
           </div>
         {/each}
       </div>
@@ -179,6 +224,28 @@
     padding: 10px;
     border-radius: 4px;
     margin-top: 15px;
+  }
+  
+  .results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+  }
+  
+  .download-button {
+    background-color: #2196F3;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+  }
+  
+  .download-button:hover {
+    background-color: #0b7dda;
   }
   
   .company-card {
