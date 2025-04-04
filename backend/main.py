@@ -1,7 +1,9 @@
 import sys
 import requests
 import json
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from typing import List
 
 class Company(BaseModel):
     name: str
@@ -9,31 +11,50 @@ class Company(BaseModel):
     industry: str
     founded: int
 
-
 class WebsiteAnalysis(BaseModel):
-    companies: list[Company]
+    companies: List[Company]
 
-def main():
-    if len(sys.argv) < 2:
-        print("Please provide a website URL as an argument")
-        sys.exit(1)
-    
-    website = sys.argv[1]
-    website = "https://r.jina.ai/" + website
+class WebsiteRequest(BaseModel):
+    url: str
 
+app = FastAPI(
+    title="Company Extractor API",
+    description="API to extract company information from websites",
+    version="1.0.0"
+)
+
+@app.post("/analyze", response_model=WebsiteAnalysis)
+async def analyze_website(request: WebsiteRequest):
+    print(f"Received request to analyze website: {request.url}")
     try:
+        website = "https://r.jina.ai/" + request.url
+        print(f"Full website URL: {website}")
+
         # Fetch website content
+        print("Fetching website content...")
         response = requests.get(website)
-        response.raise_for_status()  # Raise an exception for bad status codes
+        response.raise_for_status()
         content = response.text
+        print(f"Website content fetched successfully. Content length: {len(content)} characters")
+        
+        # Print the actual content
+        print("\n" + "="*50)
+        print("WEBSITE CONTENT:")
+        print("="*50)
+        print(content)
+        print("="*50 + "\n")
 
         # Limit content length to first 2000 characters
         content = content[:2000]
-        print("Website content (truncated):")
+        print(f"Content truncated to {len(content)} characters")
+        print("\n" + "="*50)
+        print("TRUNCATED CONTENT:")
+        print("="*50)
         print(content)
-        print("\n" + "="*50 + "\n")
+        print("="*50 + "\n")
 
         # Prepare the request to Ollama API
+        print("Preparing request to Ollama API...")
         ollama_data = {
             "model": "llama3.2",
             "messages": [{
@@ -48,39 +69,38 @@ def main():
             "format": WebsiteAnalysis.model_json_schema(),
             "options": {"num_ctx": 4096}
         }
+        print(f"Ollama request data prepared with format: {json.dumps(WebsiteAnalysis.model_json_schema(), indent=2)}")
 
-        print("Sending request to Ollama API...")
         # Send request to Ollama API with timeout
+        print("Sending request to Ollama API...")
         ollama_response = requests.post(
             "http://localhost:11434/api/chat",
             json=ollama_data,
-            timeout=30  # 30 second timeout
+            timeout=30
         )
         ollama_response.raise_for_status()
+        print("Received response from Ollama API")
 
         # Print raw response for debugging
-        print("\nRaw Ollama API Response:")
-        print(json.dumps(ollama_response.json(), indent=2))
-        print("\n" + "="*50 + "\n")
+        result = ollama_response.json()
+        print(f"Raw Ollama response: {json.dumps(result, indent=2)}")
 
         # Parse and validate the response
-        result = ollama_response.json()
+        print("Parsing and validating response...")
         analysis = WebsiteAnalysis.model_validate_json(result['message']['content'])
+        print(f"Successfully extracted {len(analysis.companies)} companies")
         
-        print("\nExtracted Companies:")
-        for company in analysis.companies:
-            print(f"\nCompany: {company.name}")
-            print(f"Industry: {company.industry}")
-            print(f"Funding: ${company.funding:,}")
-            print(f"Founded: {company.founded}")
+        return analysis
 
     except requests.RequestException as e:
-        print(f"Error: {e}")
-        sys.exit(1)
+        print(f"Request error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching website: {str(e)}")
     except Exception as e:
-        print(f"Error processing response: {e}")
-        sys.exit(1)
+        print(f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
 if __name__ == "__main__":
-    main()
+    import uvicorn
+    print("Starting Company Extractor API server...")
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
